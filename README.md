@@ -22,35 +22,32 @@ It allows an AI to **see**, **create**, **modify**, and **control** everything i
 2.  Add the `MCPBridge` script to any GameObject in your scene (or create an empty one named "MCPBridge").
 3.  The server runs on `http://localhost:8080`.
 
-### 2. MCP Server Setup (`/mcp-server`)
-1.  Install Node.js.
-2.  Navigate to the `mcp-server` folder:
-    ```bash
-    cd mcp-server
-    ```
-3.  Install dependencies:
-    ```bash
-    npm install
-    ```
-4.  Build and run:
-    ```bash
-    npm run build
-    npm start
-    ```
+### 2. Running the Server
+**Option A: The Easy Way (Unity Editor)**
+1.  In Unity, click **Tools > Unity MCP Server** in the top menu.
+2.  Click the green **Start Server** button.
+3.  A terminal window will open showing the server logs.
+
+**Option B: The Manual Way (Terminal)**
+1.  Navigate to the `mcp-server` folder.
+2.  Run `npm install` (first time only).
+3.  Run `npm start`.
 
 ### 3. Client Configuration
-Add the server to your MCP Client config (e.g., `claude_desktop_config.json`):
+Add the server to your MCP Client config (e.g., `claude_desktop_config.json`).
+**Important**: You need to point to the built file.
 
 ```json
 {
   "mcpServers": {
     "unity": {
       "command": "node",
-      "args": ["/path/to/mcp-server/dist/index.js"]
+      "args": ["E:/GAME UNITY/MCP SERVER/mcp-server/dist/index.js"] 
     }
   }
 }
 ```
+*(Note: Replace the path with the actual absolute path to your project)*
 
 ## 📚 Available Tools
 
