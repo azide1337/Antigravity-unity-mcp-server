@@ -80,6 +80,7 @@ public class MCPServerWindow : EditorWindow
         startInfo.CreateNoWindow = true; // Hide the black window
         startInfo.RedirectStandardOutput = true;
         startInfo.RedirectStandardError = true;
+        startInfo.RedirectStandardInput = true; // Required to keep Node process alive
         
         try
         {
@@ -90,7 +91,12 @@ public class MCPServerWindow : EditorWindow
                 if (!string.IsNullOrEmpty(args.Data)) UnityEngine.Debug.Log($"[MCP] {args.Data}");
             };
             serverProcess.ErrorDataReceived += (sender, args) => {
-                if (!string.IsNullOrEmpty(args.Data)) UnityEngine.Debug.LogError($"[MCP Error] {args.Data}");
+                if (!string.IsNullOrEmpty(args.Data)) {
+                    if (args.Data.Contains("running on stdio")) 
+                        UnityEngine.Debug.Log($"[MCP] {args.Data}");
+                    else 
+                        UnityEngine.Debug.LogError($"[MCP Error] {args.Data}");
+                }
             };
 
             serverProcess.BeginOutputReadLine();
