@@ -47,6 +47,7 @@ public class MCPServerWindow : EditorWindow
             if (GUILayout.Button("Stop Server", GUILayout.Height(40)))
             {
                 StopServer();
+                return;
             }
             GUI.backgroundColor = Color.white;
             EditorGUILayout.HelpBox($"Server running. PID: {serverProcess.Id}", MessageType.Info);
