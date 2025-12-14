@@ -68,7 +68,7 @@ public class MCPServerWindow : EditorWindow
         ProcessStartInfo startInfo = new ProcessStartInfo();
 #if UNITY_EDITOR_WIN
         startInfo.FileName = "cmd.exe";
-        startInfo.Arguments = "/c npm start";
+        startInfo.Arguments = "/k npm start";
 #else
         startInfo.FileName = "/bin/bash";
         startInfo.Arguments = "-c \"npm start\"";
