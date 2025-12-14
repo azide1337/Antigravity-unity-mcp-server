@@ -43,6 +43,7 @@ public class MCPServerWindow : EditorWindow
                     serverProcess = proc;
                     UnityEngine.Debug.Log($"[MCP] Re-attached to existing server (PID: {savedPid})");
                     HookEvents(serverProcess);
+                    EnsureBridgeExists(); // Ensure the scene object exists
                     return;
                 }
             }
@@ -57,6 +58,16 @@ public class MCPServerWindow : EditorWindow
         if (serverProcess == null || serverProcess.HasExited)
         {
             StartServerStatic();
+        }
+    }
+
+    private static void EnsureBridgeExists()
+    {
+        if (Object.FindObjectOfType<MCPBridge>() == null)
+        {
+            GameObject obj = new GameObject("MCPBridge");
+            obj.AddComponent<MCPBridge>();
+            UnityEngine.Debug.Log("[MCP] Auto-created MCPBridge object in scene.");
         }
     }
 
@@ -122,6 +133,7 @@ public class MCPServerWindow : EditorWindow
             EditorPrefs.SetInt(PID_PREF_KEY, serverProcess.Id);
             
             HookEvents(serverProcess);
+            EnsureBridgeExists();
 
             UnityEngine.Debug.Log("MCP Server started in background.");
         }
