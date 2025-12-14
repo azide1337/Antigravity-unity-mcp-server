@@ -79,5 +79,4 @@ Add the server to your MCP Client config (e.g., `claude_desktop_config.json`):
 *   Unity 2020.3 or later (tested on 6000.0.26f1).
 *   Node.js 16+.
 
----
-Built with ❤️ by **Antigravity**.
+
