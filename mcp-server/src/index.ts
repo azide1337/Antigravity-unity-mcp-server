@@ -157,6 +157,34 @@ server.tool("invoke_method", "Invoke a method on a component.", {
     return { content: [{ type: "text", text: `Invoked ${methodName}` }] };
 });
 
+
+
+server.tool("get_screenshot", "Capture a screenshot of the Game View.", {}, async () => {
+    const result = await callUnity("/screenshot", "POST");
+    if (result.error) return { content: [{ type: "text", text: `Error: ${result.error}` }] };
+    return {
+        content: [
+            { type: "text", text: "Screenshot captured." },
+            { type: "image", data: result.image, mimeType: "image/jpeg" }
+        ]
+    };
+});
+
+server.tool("get_console_logs", "Get recent Unity console logs.", {}, async () => {
+    const result = await callUnity("/logs", "GET");
+    if (result.error) return { content: [{ type: "text", text: `Error: ${result.error}` }] };
+    return { content: [{ type: "text", text: result.logs || "No new logs." }] };
+});
+
+server.tool("create_script", "Create a new C# script.", {
+    fileName: z.string().describe("Filename including .cs extension (e.g. MyScript.cs)"),
+    code: z.string().describe("The full C# code"),
+}, async ({ fileName, code }) => {
+    const result = await callUnity("/create_script", "POST", { fileName, code });
+    if (result.error) return { content: [{ type: "text", text: `Error: ${result.error}` }] };
+    return { content: [{ type: "text", text: `Created script at ${result.path}. Unity is compiling...` }] };
+});
+
 async function main() {
     const transport = new StdioServerTransport();
     await server.connect(transport);

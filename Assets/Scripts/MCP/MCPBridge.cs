@@ -210,6 +210,45 @@ public class MCPBridge : MonoBehaviour
                                     localResp = "{\"status\":\"created\", \"name\":\"" + go.name + "\"}";
                                 } else { localResp = "{\"error\":\"Prefab not found at " + json.path + "\"}"; statusCode = 404; }
                             }
+                            else if (url == "/screenshot")
+                            {
+                                // Vision: Capture GameView
+                                Texture2D screenTex = ScreenCapture.CaptureScreenshotAsTexture();
+                                if (screenTex != null) {
+                                    byte[] bytes = screenTex.EncodeToJPG(75); // JPG is smaller/faster than PNG
+                                    string base64 = System.Convert.ToBase64String(bytes);
+                                    Destroy(screenTex);
+                                    localResp = "{\"status\":\"success\", \"image\":\"" + base64 + "\"}";
+                                } else {
+                                    localResp = "{\"error\":\"Failed to capture screenshot. Is Game View active?\"}";
+                                    statusCode = 500;
+                                }
+                            }
+                            else if (url == "/logs")
+                            {
+                                // Hearing: Return buffered logs
+                                string joinedLogs = "";
+                                lock(logLock) {
+                                    joinedLogs = string.Join("\\n", logBuffer).Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\r", "");
+                                    logBuffer.Clear(); 
+                                }
+                                localResp = "{\"status\":\"success\", \"logs\":\"" + joinedLogs + "\"}";
+                            }
+                            else if (url == "/create_script")
+                            {
+                                // Creation: Write C# file
+                                var json = JsonUtility.FromJson<ScriptRequest>(body);
+                                string folder = Path.Combine(Application.dataPath, "Scripts", "Generated");
+                                if(!Directory.Exists(folder)) Directory.CreateDirectory(folder);
+                                
+                                string filePath = Path.Combine(folder, json.fileName);
+                                File.WriteAllText(filePath, json.code);
+                                
+#if UNITY_EDITOR
+                                AssetDatabase.Refresh(); // Trigger compilation
+#endif
+                                localResp = "{\"status\":\"created\", \"path\":\"" + filePath + "\"}";
+                            }
                             else if (url == "/invoke")
                             {
                                 var json = JsonUtility.FromJson<InvokeRequest>(body);
@@ -462,6 +501,29 @@ public class MCPBridge : MonoBehaviour
     [Serializable] public class TransformRequest { public string name; public float x; public float y; public float z; }
     [Serializable] public class InspectRequest { public string name; public string gameObjectName; public string componentName; } 
     [Serializable] public class SetFieldRequest { public string gameObjectName; public string componentName; public string fieldName; public string value; }
+    // Logging Infrastructure
+    private static List<string> logBuffer = new List<string>();
+    private static object logLock = new object();
+    private const int MAX_LOGS = 50;
+
+    void OnEnable() {
+        Application.logMessageReceivedThreaded += HandleLog;
+    }
+
+    void OnDisable() {
+        Application.logMessageReceivedThreaded -= HandleLog;
+    }
+
+    private void HandleLog(string logString, string stackTrace, LogType type) {
+        lock(logLock) {
+            if(logBuffer.Count >= MAX_LOGS) logBuffer.RemoveAt(0);
+            string prefix = type == LogType.Error || type == LogType.Exception ? "[ERROR] " : "[LOG] ";
+            logBuffer.Add(prefix + logString);
+        }
+    }
+
+    [Serializable] public class ScriptRequest { public string fileName; public string code; }
+
     [Serializable] public class TagRequest { public string tag; public string name; }
     [Serializable] public class ParentRequest { public string name; public string parentName; }
     [Serializable] public class InstantiateRequest { public string path; public string name; }
