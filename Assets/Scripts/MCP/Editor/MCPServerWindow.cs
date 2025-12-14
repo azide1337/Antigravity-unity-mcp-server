@@ -3,10 +3,18 @@ using UnityEditor;
 using System.Diagnostics;
 using System.IO;
 
+[InitializeOnLoad]
 public class MCPServerWindow : EditorWindow
 {
     private static Process serverProcess;
-    private string serverPath;
+    private static string serverPath;
+    private const string PID_PREF_KEY = "MCP_Server_PID";
+
+    static MCPServerWindow()
+    {
+        // Called on Unity load and after every compilation
+        EditorApplication.delayCall += TryAutoStart;
+    }
 
     [MenuItem("Tools/Unity MCP Server")]
     public static void ShowWindow()
@@ -20,9 +28,36 @@ public class MCPServerWindow : EditorWindow
         serverPath = Path.GetFullPath(Path.Combine(Application.dataPath, "../mcp-server"));
     }
 
-    private void OnDisable()
+    private static void TryAutoStart()
     {
-        // Optional: Kill server on window close? Better to leave it running unless explicitly stopped.
+        serverPath = Path.GetFullPath(Path.Combine(Application.dataPath, "../mcp-server"));
+        
+        int savedPid = EditorPrefs.GetInt(PID_PREF_KEY, -1);
+        if (savedPid != -1)
+        {
+            try
+            {
+                var proc = Process.GetProcessById(savedPid);
+                if (!proc.HasExited)
+                {
+                    serverProcess = proc;
+                    UnityEngine.Debug.Log($"[MCP] Re-attached to existing server (PID: {savedPid})");
+                    HookEvents(serverProcess);
+                    return;
+                }
+            }
+            catch
+            {
+                // Process not found or other error, clear pref and restart
+                EditorPrefs.DeleteKey(PID_PREF_KEY);
+            }
+        }
+
+        // If we fall through here, and IT'S NOT RUNNING, start a new one
+        if (serverProcess == null || serverProcess.HasExited)
+        {
+            StartServerStatic();
+        }
     }
 
     private void OnGUI()
@@ -36,7 +71,7 @@ public class MCPServerWindow : EditorWindow
             GUI.backgroundColor = Color.green;
             if (GUILayout.Button("Start Server", GUILayout.Height(40)))
             {
-                StartServer();
+                StartServerStatic();
             }
             GUI.backgroundColor = Color.white;
             EditorGUILayout.HelpBox("Server is NOT running.", MessageType.Info);
@@ -58,7 +93,7 @@ public class MCPServerWindow : EditorWindow
         EditorGUILayout.SelectableLabel(serverPath, EditorStyles.textField, GUILayout.Height(20));
     }
 
-    private void StartServer()
+    private static void StartServerStatic()
     {
         if (!Directory.Exists(serverPath))
         {
@@ -75,7 +110,6 @@ public class MCPServerWindow : EditorWindow
         startInfo.Arguments = "-c \"npm start\"";
 #endif
         startInfo.WorkingDirectory = serverPath;
-        startInfo.WorkingDirectory = serverPath;
         startInfo.UseShellExecute = false;
         startInfo.CreateNoWindow = true; // Hide the black window
         startInfo.RedirectStandardOutput = true;
@@ -85,22 +119,9 @@ public class MCPServerWindow : EditorWindow
         try
         {
             serverProcess = Process.Start(startInfo);
+            EditorPrefs.SetInt(PID_PREF_KEY, serverProcess.Id);
             
-            // Redirect logs to Unity Console
-            serverProcess.OutputDataReceived += (sender, args) => {
-                if (!string.IsNullOrEmpty(args.Data)) UnityEngine.Debug.Log($"[MCP] {args.Data}");
-            };
-            serverProcess.ErrorDataReceived += (sender, args) => {
-                if (!string.IsNullOrEmpty(args.Data)) {
-                    if (args.Data.Contains("running on stdio")) 
-                        UnityEngine.Debug.Log($"[MCP] {args.Data}");
-                    else 
-                        UnityEngine.Debug.LogError($"[MCP Error] {args.Data}");
-                }
-            };
-
-            serverProcess.BeginOutputReadLine();
-            serverProcess.BeginErrorReadLine();
+            HookEvents(serverProcess);
 
             UnityEngine.Debug.Log("MCP Server started in background.");
         }
@@ -110,12 +131,32 @@ public class MCPServerWindow : EditorWindow
         }
     }
 
+    private static void HookEvents(Process p)
+    {
+        p.OutputDataReceived += (sender, args) => {
+            if (!string.IsNullOrEmpty(args.Data)) UnityEngine.Debug.Log($"[MCP] {args.Data}");
+        };
+        p.ErrorDataReceived += (sender, args) => {
+            if (!string.IsNullOrEmpty(args.Data)) {
+                if (args.Data.Contains("running on stdio")) 
+                    UnityEngine.Debug.Log($"[MCP] {args.Data}");
+                else 
+                    UnityEngine.Debug.LogError($"[MCP Error] {args.Data}");
+            }
+        };
+        p.BeginOutputReadLine();
+        p.BeginErrorReadLine();
+    }
+
     private void StopServer()
     {
         if (serverProcess != null && !serverProcess.HasExited)
         {
-            serverProcess.Kill();
+            try {
+                serverProcess.Kill();
+            } catch {}
             serverProcess = null;
+            EditorPrefs.DeleteKey(PID_PREF_KEY);
             UnityEngine.Debug.Log("MCP Server stopped.");
         }
     }
