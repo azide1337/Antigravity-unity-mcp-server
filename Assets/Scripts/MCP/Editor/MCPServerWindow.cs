@@ -69,19 +69,34 @@ public class MCPServerWindow : EditorWindow
         ProcessStartInfo startInfo = new ProcessStartInfo();
 #if UNITY_EDITOR_WIN
         startInfo.FileName = "cmd.exe";
-        startInfo.Arguments = "/k npm start";
+        startInfo.Arguments = "/c npm start";
 #else
         startInfo.FileName = "/bin/bash";
         startInfo.Arguments = "-c \"npm start\"";
 #endif
         startInfo.WorkingDirectory = serverPath;
-        startInfo.UseShellExecute = true; // Use shell to open a separate window (easier to see logs)
-        // startInfo.RedirectStandardOutput = true; // Use this if we want to capture logs inside Unity (more complex)
+        startInfo.WorkingDirectory = serverPath;
+        startInfo.UseShellExecute = false;
+        startInfo.CreateNoWindow = true; // Hide the black window
+        startInfo.RedirectStandardOutput = true;
+        startInfo.RedirectStandardError = true;
         
         try
         {
             serverProcess = Process.Start(startInfo);
-            UnityEngine.Debug.Log("MCP Server started.");
+            
+            // Redirect logs to Unity Console
+            serverProcess.OutputDataReceived += (sender, args) => {
+                if (!string.IsNullOrEmpty(args.Data)) UnityEngine.Debug.Log($"[MCP] {args.Data}");
+            };
+            serverProcess.ErrorDataReceived += (sender, args) => {
+                if (!string.IsNullOrEmpty(args.Data)) UnityEngine.Debug.LogError($"[MCP Error] {args.Data}");
+            };
+
+            serverProcess.BeginOutputReadLine();
+            serverProcess.BeginErrorReadLine();
+
+            UnityEngine.Debug.Log("MCP Server started in background.");
         }
         catch (System.Exception e)
         {
