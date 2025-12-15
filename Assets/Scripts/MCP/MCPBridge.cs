@@ -9,7 +9,9 @@ using UnityEngine;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
+using UnityEngine.AI;
 
+// Recompile Trigger
 [ExecuteAlways]
 public class MCPBridge : MonoBehaviour
 {
@@ -24,6 +26,7 @@ public class MCPBridge : MonoBehaviour
     {
         StopServer(); 
         StartServer();
+        Application.logMessageReceivedThreaded += HandleLog;
 #if UNITY_EDITOR
         EditorApplication.update += Update;
 #endif
@@ -34,6 +37,7 @@ public class MCPBridge : MonoBehaviour
 #if UNITY_EDITOR
         EditorApplication.update -= Update;
 #endif
+        Application.logMessageReceivedThreaded -= HandleLog;
         StopServer();
     }
 
@@ -318,6 +322,53 @@ public class MCPBridge : MonoBehaviour
                                 localResp = "{\"error\":\"Editor Only feature\"}";
 #endif
                             }
+                            else if (url == "/physics/cast")
+                            {
+                                // Spatial: Physics Query
+                                var json = JsonUtility.FromJson<PhysicsRequest>(body);
+                                var origin = GameObject.Find(json.origin)?.transform.position ?? Vector3.zero;
+                                if(json.useVectorOrigin) origin = new Vector3(json.originX, json.originY, json.originZ);
+                                
+                                List<string> hits = new List<string>();
+                                
+                                if(json.type == "ray") {
+                                    Vector3 dir = new Vector3(json.dirX, json.dirY, json.dirZ);
+                                    if(dir == Vector3.zero) dir = GameObject.Find(json.origin)?.transform.forward ?? Vector3.forward;
+                                    
+                                    RaycastHit[] results = Physics.RaycastAll(origin, dir, json.maxDistance > 0 ? json.maxDistance : 100f);
+                                    foreach(var h in results) {
+                                        hits.Add($"{{\"name\": \"{h.collider.name}\", \"distance\": {h.distance}, \"point\": \"{h.point}\", \"tag\": \"{h.collider.tag}\"}}");
+                                    }
+                                }
+                                else if (json.type == "sphere") {
+                                    Collider[] results = Physics.OverlapSphere(origin, json.radius > 0 ? json.radius : 5f);
+                                    foreach(var c in results) {
+                                         hits.Add($"{{\"name\": \"{c.name}\", \"distance\": {Vector3.Distance(origin, c.transform.position)}, \"point\": \"{c.transform.position}\", \"tag\": \"{c.tag}\"}}");
+                                    }
+                                }
+                                localResp = "{\"status\":\"success\", \"hits\":[" + string.Join(",", hits) + "]}";
+                            }
+                            else if (url == "/navmesh/path")
+                            {
+                                // Spatial: Navigation
+                                var json = JsonUtility.FromJson<NavMeshRequest>(body);
+                                var start = GameObject.Find(json.from)?.transform.position ?? Vector3.zero;
+                                var end = GameObject.Find(json.to)?.transform.position ?? Vector3.zero;
+                                if(json.useVectors) {
+                                    start = new Vector3(json.startX, json.startY, json.startZ);
+                                    end = new Vector3(json.endX, json.endY, json.endZ);
+                                }
+
+                                NavMeshPath path = new NavMeshPath();
+                                if(NavMesh.CalculatePath(start, end, NavMesh.AllAreas, path)) {
+                                    List<string> corners = new List<string>();
+                                    foreach(var c in path.corners) corners.Add($"\"{c.x},{c.y},{c.z}\"");
+                                    localResp = "{\"status\":\"success\", \"pathStatus\":\"" + path.status + "\", \"corners\":[" + string.Join(",", corners) + "]}";
+                                } else {
+                                    localResp = "{\"error\":\"Failed to calculate path. Is NavMesh baked?\"}";
+                                    statusCode = 500;
+                                }
+                            }
                             else if (url == "/object/tag")
                             {
                                 var json = JsonUtility.FromJson<TagRequest>(body);
@@ -506,13 +557,7 @@ public class MCPBridge : MonoBehaviour
     private static object logLock = new object();
     private const int MAX_LOGS = 50;
 
-    void OnEnable() {
-        Application.logMessageReceivedThreaded += HandleLog;
-    }
 
-    void OnDisable() {
-        Application.logMessageReceivedThreaded -= HandleLog;
-    }
 
     private void HandleLog(string logString, string stackTrace, LogType type) {
         lock(logLock) {
@@ -528,4 +573,20 @@ public class MCPBridge : MonoBehaviour
     [Serializable] public class ParentRequest { public string name; public string parentName; }
     [Serializable] public class InstantiateRequest { public string path; public string name; }
     [Serializable] public class InvokeRequest { public string gameObjectName; public string componentName; public string methodName; public string parameter; }
+    
+    [Serializable] public class PhysicsRequest { 
+        public string type; // "ray" or "sphere"
+        public string origin; // GameObject name
+        public bool useVectorOrigin; public float originX; public float originY; public float originZ;
+        public float dirX; public float dirY; public float dirZ; // for ray
+        public float maxDistance; 
+        public float radius; // for sphere
+    }
+
+    [Serializable] public class NavMeshRequest {
+        public string from; public string to; // GameObject names
+        public bool useVectors;
+        public float startX; public float startY; public float startZ;
+        public float endX; public float endY; public float endZ;
+    }
 }

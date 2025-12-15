@@ -185,6 +185,45 @@ server.tool("create_script", "Create a new C# script.", {
     return { content: [{ type: "text", text: `Created script at ${result.path}. Unity is compiling...` }] };
 });
 
+
+
+server.tool("check_line_of_sight", "Check if there is a clear line of sight between two points or from an object.", {
+    origin: z.string().describe("Name of the origin GameObject"),
+    direction: z.string().optional().describe("Direction vector 'x,y,z' (optional, defaults to forward)"),
+    maxDistance: z.number().optional().describe("Max distance to check"),
+}, async ({ origin, direction, maxDistance }) => {
+    let dir = { x: 0, y: 0, z: 0 };
+    if (direction) { const parts = direction.split(',').map(Number); dir = { x: parts[0], y: parts[1], z: parts[2] }; }
+
+    const result = await callUnity("/physics/cast", "POST", {
+        type: "ray",
+        origin,
+        dirX: dir.x, dirY: dir.y, dirZ: dir.z,
+        maxDistance: maxDistance || 100
+    });
+
+    if (result.error) return { content: [{ type: "text", text: `Error: ${result.error}` }] };
+    return { content: [{ type: "text", text: `Hits: ${JSON.stringify(result.hits)}` }] };
+});
+
+server.tool("check_surroundings", "Check what objects are nearby (Physics OverlapSphere).", {
+    origin: z.string().describe("Name of the origin GameObject"),
+    radius: z.number().optional().describe("Radius to check (default 5)"),
+}, async ({ origin, radius }) => {
+    const result = await callUnity("/physics/cast", "POST", { type: "sphere", origin, radius: radius || 5 });
+    if (result.error) return { content: [{ type: "text", text: `Error: ${result.error}` }] };
+    return { content: [{ type: "text", text: `Nearby Objects: ${JSON.stringify(result.hits)}` }] };
+});
+
+server.tool("get_navigation_path", "Calculate a path on the NavMesh.", {
+    from: z.string().describe("Start GameObject name"),
+    to: z.string().describe("Target GameObject name"),
+}, async ({ from, to }) => {
+    const result = await callUnity("/navmesh/path", "POST", { from, to });
+    if (result.error) return { content: [{ type: "text", text: `Error: ${result.error}` }] };
+    return { content: [{ type: "text", text: `Path Status: ${result.pathStatus}, Corners: ${JSON.stringify(result.corners)}` }] };
+});
+
 async function main() {
     const transport = new StdioServerTransport();
     await server.connect(transport);
